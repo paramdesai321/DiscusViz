@@ -1,0 +1,100 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>DiscusViz</title>
+  <script src="https://unpkg.com/cytoscape/dist/cytoscape.min.js"></script>
+  <style>
+    body { margin:0; font-family: system-ui; }
+    #bar { padding:10px; display:flex; gap:10px; align-items:center; border-bottom:1px solid #ddd; }
+    #cy { height: calc(100vh - 52px); }
+    button, select { padding:6px 10px; }
+  </style>
+</head>
+<body>
+  <div id="bar">
+    <button id="addNode">Add node</button>
+    <select id="edgeType">
+      <option value="reply">reply</option>
+      <option value="supports">supports</option>
+      <option value="contradicts">contradicts</option>
+      <option value="references">references</option>
+    </select>
+    <span>Tip: click two nodes to create an edge.</span>
+  </div>
+  <div id="cy"></div>
+
+  <script>
+    const API = "http://127.0.0.1:8000";
+
+    let cy = cytoscape({
+      container: document.getElementById("cy"),
+      elements: [],
+      style: [
+        { selector: "node", style: { "label": "data(label)", "text-valign": "center", "text-halign": "center" } },
+        { selector: "edge", style: { "label": "data(type)", "curve-style": "bezier", "target-arrow-shape": "triangle" } },
+        { selector: ".selected", style: { "border-width": 3 } }
+      ],
+      layout: { name: "cose" }
+    });
+
+    async function loadGraph() {
+      const r = await fetch(`${API}/graph`);
+      const g = await r.json();
+      cy.elements().remove();
+      cy.add([...g.nodes, ...g.edges]);
+      cy.layout({ name: "cose" }).run();
+    }
+
+    document.getElementById("addNode").onclick = async () => {
+      const title = prompt("Node title?");
+      if (!title) return;
+      const body = prompt("Body (optional)?") || "";
+      await fetch(`${API}/nodes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, body })
+      });
+      await loadGraph();
+    };
+
+    // create edges by selecting two nodes
+    let first = null;
+
+    cy.on("tap", "node", async (evt) => {
+      const n = evt.target;
+      if (!first) {
+        first = n;
+        n.addClass("selected");
+        return;
+      }
+      const second = n;
+      const type = document.getElementById("edgeType").value;
+
+      if (first.id() === second.id()) {
+        first.removeClass("selected");
+        first = null;
+        return;
+      }
+
+      await fetch(`${API}/edges`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: first.id(), target: second.id(), type })
+      });
+
+      first.removeClass("selected");
+      first = null;
+      await loadGraph();
+    });
+
+    // double click node to rename
+    cy.on("dblclick", "node", async (evt) => {
+      const n = evt.target;
+      alert("Renaming/editing body is the next step (add PUT /nodes/{id}).");
+    });
+
+    loadGraph();
+  </script>
+</body>
+</html>
