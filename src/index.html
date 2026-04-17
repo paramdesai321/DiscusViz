@@ -31,10 +31,37 @@
       container: document.getElementById("cy"),
       elements: [],
       style: [
-        { selector: "node", style: { "label": "data(label)", "text-valign": "center", "text-halign": "center" } },
-        { selector: "edge", style: { "label": "data(type)", "curve-style": "bezier", "target-arrow-shape": "triangle" } },
-        { selector: ".selected", style: { "border-width": 3 } }
-      ],
+  {
+    selector: "node",
+    style: {
+      "label": "data(label)",
+      "font-size": "10px",
+      "text-wrap": "wrap",
+      "text-max-width": "80px",
+      "text-valign": "center",
+      "text-halign": "center"
+    }
+  },
+  {
+    selector: "edge",
+    style: {
+      "label": "data(type)",
+      "font-size": "8px",
+      "curve-style": "bezier",
+      "target-arrow-shape": "triangle",
+      "text-background-color": "#ffffff",
+      "text-background-opacity": 1,
+      "text-background-padding": "2px"
+    }
+  },
+  {
+    selector: ".selected",
+    style: {
+      "border-width": 3,
+      "border-color": "blue"
+    }
+  }
+] ,
       layout: { name: "cose" }
     });
 
