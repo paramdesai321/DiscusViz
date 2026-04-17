@@ -13,6 +13,8 @@
 </head>
 <body>
   <div id="bar">
+    <textarea id="inputText" placeholder="Paste social media post here..." rows="2" style="width:300px;"></textarea>
+    <button id="generate">Generate Graph</button>
     <button id="addNode">Add node</button>
     <select id="edgeType">
       <option value="reply">reply</option>
@@ -31,11 +33,44 @@
       container: document.getElementById("cy"),
       elements: [],
       style: [
-        { selector: "node", style: { "label": "data(label)", "text-valign": "center", "text-halign": "center" } },
-        { selector: "edge", style: { "label": "data(type)", "curve-style": "bezier", "target-arrow-shape": "triangle" } },
-        { selector: ".selected", style: { "border-width": 3 } }
-      ],
-      layout: { name: "cose" }
+  {
+    selector: "node",
+    style: {
+      "label": "data(label)",
+      "font-size": "10px",
+      "text-wrap": "wrap",
+      "text-max-width": "80px",
+      "text-valign": "center",
+      "text-halign": "center"
+    }
+  },
+  {
+    selector: "edge",
+    style: {
+      "label": "data(type)",
+      "font-size": "8px",
+      "curve-style": "bezier",
+      "target-arrow-shape": "triangle",
+      "text-background-color": "#ffffff",
+      "text-background-opacity": 1,
+      "text-background-padding": "2px"
+    }
+  },
+  {
+    selector: ".selected",
+    style: {
+      "border-width": 3,
+      "border-color": "blue"
+    }
+  }
+] ,
+      layout: {
+          name: "cose",
+        padding: 80,
+        nodeRepulsion: 8000,
+        idealEdgeLength: 120,
+        edgeElasticity: 0.45
+}
     });
 
     async function loadGraph() {
@@ -93,6 +128,24 @@
       const n = evt.target;
       alert("Renaming/editing body is the next step (add PUT /nodes/{id}).");
     });
+    document.getElementById("generate").onclick = async () => {
+  const text = document.getElementById("inputText").value;
+
+  if (!text) {
+    alert("Enter some text first");
+    return;
+  }
+
+  await fetch(`${API}/generate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(text)
+  });
+
+  await loadGraph(); // refresh graph
+};
 
     loadGraph();
   </script>
