@@ -4,7 +4,8 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, String, Text, ForeignKey
 from sqlalchemy.orm import declarative_base, sessionmaker
 import uuid
-
+from fastapi import Body
+import uuid
 app = FastAPI(title="DiscusViz API")
 
 engine = create_engine("sqlite:///discusviz.db", connect_args={"check_same_thread": False})
@@ -85,6 +86,46 @@ def delete_edge(edge_id: str):
     db.delete(edge)
     db.commit()
     return {"ok": True}
+
+@app.post("/generate")
+def generate_graph(text: str = Body(...)):
+    db = SessionLocal()
+
+    # Clear old graph (optional but helpful)
+    db.query(EdgeDB).delete()
+    db.query(NodeDB).delete()
+
+    # 1. Split text into sentences
+    sentences = [s.strip() for s in text.split('.') if s.strip()]
+
+    node_ids = []
+
+    # 2. Create nodes
+    for s in sentences:
+        nid = str(uuid.uuid4())
+        db.add(NodeDB(id=nid, title=s, body=s))
+        node_ids.append(nid)
+
+    # 3. Create edges (simple logic)
+    for i in range(len(sentences) - 1):
+        s = sentences[i].lower()
+
+        if "but" in s or "however" in s:
+            etype = "contradicts"
+        elif "because" in s or "therefore" in s:
+            etype = "supports"
+        else:
+            etype = "reply"
+
+        db.add(EdgeDB(
+            id=str(uuid.uuid4()),
+            source=node_ids[i],
+            target=node_ids[i+1],
+            type=etype
+        ))
+
+    db.commit()
+    return {"status": "ok"}
 
 
 app.add_middleware(
