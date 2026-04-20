@@ -1,4 +1,5 @@
 from fastapi.middleware.cors import CORSMiddleware
+import re
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, String, Text, ForeignKey
@@ -142,8 +143,19 @@ Text:
             content = response.choices[0].message.content
             print("LLM OUTPUT:", content)
 
-            data = json.loads(content)
 
+# Extract JSON block
+            match = re.search(r"\{.*\}", content, re.DOTALL)
+
+            if not match:
+                return {"error": "No JSON found in LLM output", "raw": content}
+
+            json_str = match.group(0)
+
+            try:
+                data = json.loads(json_str)
+            except Exception as e:
+                return {"error": "Invalid JSON", "raw": content}
             id_map = {}
 
             for node in data.get("nodes", []):
