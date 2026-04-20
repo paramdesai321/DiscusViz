@@ -141,12 +141,14 @@
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(text)
+    body: JSON.stringify({ text: text })   // ✅ FIXED
   });
 
-  await loadGraph(); // refresh graph
+  // ✅ DELAY to avoid DB lock
+  setTimeout(() => {
+    loadGraph();
+  }, 500);
 };
-
     loadGraph();
   </script>
 </body>

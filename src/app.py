@@ -6,9 +6,18 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 import uuid
 from fastapi import Body
 import uuid
+import threading
+
+db_lock = threading.Lock()
 app = FastAPI(title="DiscusViz API")
 
-engine = create_engine("sqlite:///discusviz.db", connect_args={"check_same_thread": False})
+engine = create_engine(
+    "sqlite:///discusviz.db",
+    connect_args={
+        "check_same_thread": False,
+        "timeout": 30
+    }
+)
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
@@ -86,45 +95,82 @@ def delete_edge(edge_id: str):
     db.delete(edge)
     db.commit()
     return {"ok": True}
+from fastapi import Body
+from openai import OpenAI
+import uuid
+import json
+
+
+client = OpenAI(
+    base_url="http://localhost:11434/v1",
+    api_key="llama3"  # dummy, required but unused
+)
 
 @app.post("/generate")
-def generate_graph(text: str = Body(...)):
-    db = SessionLocal()
+def generate_graph(payload: dict = Body(...)):
+    text = payload.get("text", "")
 
-    # Clear old graph (optional but helpful)
-    db.query(EdgeDB).delete()
-    db.query(NodeDB).delete()
+    with db_lock:   # 🔥 THIS FIXES EVERYTHING
+        db = SessionLocal()
+        try:
+            db.query(EdgeDB).delete()
+            db.query(NodeDB).delete()
+            db.commit()
+            prompt = f"""
+Return ONLY valid JSON.
 
-    # 1. Split text into sentences
-    sentences = [s.strip() for s in text.split('.') if s.strip()]
+Format:
+{{
+  "nodes": [{{"id": "1", "label": "text"}}],
+  "edges": [{{"source": "1", "target": "2", "type": "supports"}}]
+}}
 
-    node_ids = []
+Edge types must be one of:
+reply, supports, contradicts, references
 
-    # 2. Create nodes
-    for s in sentences:
-        nid = str(uuid.uuid4())
-        db.add(NodeDB(id=nid, title=s, body=s))
-        node_ids.append(nid)
+Do not include any explanation.
 
-    # 3. Create edges (simple logic)
-    for i in range(len(sentences) - 1):
-        s = sentences[i].lower()
+Text:
+{text}
+"""
+            # --- LLM call here ---
+            response = client.chat.completions.create(
+                model="llama3",
+                messages=[{"role": "user", "content": prompt}]
+            )
 
-        if "but" in s or "however" in s:
-            etype = "contradicts"
-        elif "because" in s or "therefore" in s:
-            etype = "supports"
-        else:
-            etype = "reply"
+            content = response.choices[0].message.content
+            print("LLM OUTPUT:", content)
 
-        db.add(EdgeDB(
-            id=str(uuid.uuid4()),
-            source=node_ids[i],
-            target=node_ids[i+1],
-            type=etype
-        ))
+            data = json.loads(content)
 
-    db.commit()
+            id_map = {}
+
+            for node in data.get("nodes", []):
+                nid = str(uuid.uuid4())
+                id_map[node["id"]] = nid
+
+                db.add(NodeDB(
+                    id=nid,
+                    title=node["label"],
+                    body=node["label"]
+                ))
+
+            for edge in data.get("edges", []):
+                if edge["source"] not in id_map or edge["target"] not in id_map:
+                    continue
+
+                db.add(EdgeDB(
+                    id=str(uuid.uuid4()),
+                    source=id_map[edge["source"]],
+                    target=id_map[edge["target"]],
+                    type=edge["type"]
+                ))
+
+            db.commit()
+        finally:
+            db.close()
+
     return {"status": "ok"}
 
 
